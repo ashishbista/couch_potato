@@ -35,11 +35,11 @@ module CouchPotato
     # For your convenience when passing a hash with only a key parameter you can just pass in the value
     #
     #   db.view(User.all(key: 1)) == db.view(User.all(1))
-    # 
+    #
     # Instead of passing a startkey and endkey you can pass in a key with a range:
     #
     #   db.view(User.all(key: 1..20)) == db.view(startkey: 1, endkey: 20) == db.view(User.all(1..20))
-    #   
+    #
     # You can also pass in multiple keys:
     #
     #   db.view(User.all(keys: [1, 2, 3]))
@@ -60,12 +60,12 @@ module CouchPotato
       end if processed_results.respond_to?(:each)
       processed_results
     end
-    
+
     # returns the first result from a #view query or nil
     def first(spec)
       view(spec).first
     end
-    
+
     # returns th first result from a #view or raises CouchPotato::NotFound
     def first!(spec)
       first(spec) || raise(CouchPotato::NotFound)
@@ -81,7 +81,7 @@ module CouchPotato
       end
     end
     alias_method :save, :save_document
-    
+
     # saves a document, raises a CouchPotato::Database::ValidationsFailedError on failure
     def save_document!(document)
       save_document(document) || raise(ValidationsFailedError.new(document.errors.full_messages))
@@ -101,16 +101,20 @@ module CouchPotato
     # loads a document by its id
     def load_document(id)
       raise "Can't load a document without an id (got nil)" if id.nil?
-      begin
-        instance = couchrest_database.get(id)
-        instance.database = self
-        instance
-      rescue(RestClient::ResourceNotFound)
-        nil
+      if id.is_a?(Array)
+        bulk_load id
+      else
+        begin
+          instance = couchrest_database.get(id)
+          instance.database = self
+          instance
+        rescue(RestClient::ResourceNotFound)
+          nil
+        end
       end
     end
     alias_method :load, :load_document
-    
+
     def load!(id)
       load(id) || raise(CouchPotato::NotFound)
     end
@@ -118,7 +122,7 @@ module CouchPotato
     def inspect #:nodoc:
       "#<CouchPotato::Database @root=\"#{couchrest_database.root}\">"
     end
-    
+
     # returns the underlying CouchRest::Database instance
     def couchrest_database
       @couchrest_database
@@ -126,9 +130,15 @@ module CouchPotato
 
     private
 
+    def bulk_load(ids)
+      response = couchrest_database.bulk_load ids
+      docs = response['rows'].map{|row| row["doc"]}.compact
+      docs.each{|doc| doc.database = self}
+    end
+
     def create_document(document, validate)
       document.database = self
-      
+
       if validate
         document.errors.clear
         document.run_callbacks :validation_on_save do
@@ -137,7 +147,7 @@ module CouchPotato
           end
         end
       end
-      
+
       document.run_callbacks :save do
         document.run_callbacks :create do
           res = couchrest_database.save_doc document.to_hash
