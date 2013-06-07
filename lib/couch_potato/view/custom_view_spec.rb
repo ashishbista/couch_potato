@@ -25,7 +25,12 @@ module CouchPotato
             if row['doc'].instance_of?(klass)
               row['doc']
             else
-              klass.json_create row['doc'] || row['value'].merge(:_id => row['id'] || row['key'])
+              result = row['doc'] || row['value'].merge(:_id => row['id'] || row['key'])
+              if result.is_a?(Hash)
+                klass.json_create result
+              else
+                result
+              end 
             end
           end
         end
