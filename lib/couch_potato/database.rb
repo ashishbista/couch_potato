@@ -2,7 +2,8 @@ module CouchPotato
   class Database
 
     class ValidationsFailedError < ::StandardError; end
-
+    
+    cattr_accessor :cached_results
     def initialize(couchrest_database)
       @couchrest_database = couchrest_database
       begin
@@ -44,7 +45,7 @@ module CouchPotato
     #
     #   db.view(User.all(keys: [1, 2, 3]))
     def view(spec)
-      results = CouchPotato::View::ViewQuery.new(
+      view_query = CouchPotato::View::ViewQuery.new(
         couchrest_database,
         spec.design_document,
         {spec.view_name => {
@@ -52,13 +53,18 @@ module CouchPotato
           :reduce => spec.reduce_function}
         },
         ({spec.list_name => spec.list_function} unless spec.list_name.nil?)
-      ).query_view!(spec.view_parameters)
-      processed_results = spec.process_results results
-      processed_results.instance_eval "def total_rows; #{results['total_rows']}; end" if results['total_rows']
-      processed_results.each do |document|
-        document.database = self if document.respond_to?(:database=)
-      end if processed_results.respond_to?(:each)
-      processed_results
+      )
+      @@cached_results ||= {}
+      @@cached_results[view_query.full_view_url(spec.view_parameters)] ||= 
+      begin
+        results = view_query.query_view!(spec.view_parameters)
+        processed_results = spec.process_results results
+        processed_results.instance_eval "def total_rows; #{results['total_rows']}; end" if results['total_rows']
+        processed_results.each do |document|
+          document.database = self if document.respond_to?(:database=)
+        end if processed_results.respond_to?(:each)
+        processed_results
+      end
     end
 
     # returns the first result from a #view query or nil
@@ -73,12 +79,15 @@ module CouchPotato
 
     # saves a document. returns true on success, false on failure
     def save_document(document, validate = true)
+      invalidate_cached_results(document)
       return true unless document.dirty? || document.new?
-      if document.new?
+      doc = if document.new?
         create_document(document, validate)
       else
         update_document(document, validate)
       end
+      invalidate_cached_results(document)
+      doc
     end
     alias_method :save, :save_document
 
@@ -89,6 +98,7 @@ module CouchPotato
     alias_method :save!, :save_document!
 
     def destroy_document(document)
+      invalidate_cached_results(document)
       document.run_callbacks :destroy do
         document._deleted = true
         couchrest_database.delete_doc document.to_hash
@@ -184,6 +194,10 @@ module CouchPotato
         v.each {|message| document.errors.add(k, message)}
       end
       document.errors.empty?
+    end
+
+    def invalidate_cached_results(document)
+      CouchPotato.database.cached_results.delete_if{ |key| key.to_s.match(/#{document.class.to_s}|#{document.id}/i)} if CouchPotato.database.cached_results
     end
   end
 end

@@ -24,6 +24,10 @@ module CouchPotato
         end
       end
 
+      def full_view_url(parameters = {})
+        CouchRest.paramify_url(CouchPotato.full_url_to_database + "/_design/#{@design_document_name}/_list/#{@list_name}/#{@view_name}", parameters)
+      end
+
       private
 
       def update_view

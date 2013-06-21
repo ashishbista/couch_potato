@@ -34,9 +34,13 @@ module CouchPotato
     include ClassReloading
 
     def load_document_with_class_reloading(*args)
+
+      CouchPotato.database.cached_results ||= {}
+      CouchPotato.database.cached_results[args.join('_')] ||= 
       with_class_reloading do
         load_document_without_class_reloading *args
       end
+
     end
 
     alias_method :load_document_without_class_reloading, :load_document
