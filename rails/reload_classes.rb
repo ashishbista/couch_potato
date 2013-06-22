@@ -35,10 +35,17 @@ module CouchPotato
 
     def load_document_with_class_reloading(*args)
 
-      CouchPotato.database.cached_results ||= {}
-      CouchPotato.database.cached_results[args.join('_')] ||= 
-      with_class_reloading do
-        load_document_without_class_reloading *args
+      if key =  args.flatten.join("_").empty?
+        #TODO: DRY it out 
+        CouchPotato.database.cached_results ||= {}
+        CouchPotato.database.cached_results[key] ||= 
+        with_class_reloading do
+          load_document_without_class_reloading *args
+        end
+      else
+        with_class_reloading do
+          load_document_without_class_reloading *args
+        end
       end
 
     end
