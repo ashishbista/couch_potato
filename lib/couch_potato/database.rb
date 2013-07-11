@@ -2,7 +2,7 @@ module CouchPotato
   class Database
 
     class ValidationsFailedError < ::StandardError; end
-    
+
     cattr_accessor :cached_results
     def initialize(couchrest_database)
       @couchrest_database = couchrest_database
@@ -55,7 +55,7 @@ module CouchPotato
         ({spec.list_name => spec.list_function} unless spec.list_name.nil?)
       )
       @@cached_results ||= {}
-      @@cached_results[view_query.full_view_url(spec.view_parameters)] ||= 
+      @@cached_results[view_query.full_view_url(spec.view_parameters)] ||=
       begin
         results = view_query.query_view!(spec.view_parameters)
         processed_results = spec.process_results results
@@ -138,6 +138,10 @@ module CouchPotato
       @couchrest_database
     end
 
+    def invalidate_cached_results(document)
+      CouchPotato.database.cached_results.delete_if{ |key| key.to_s.match(/#{document.class.to_s}|#{document.id}/i)} if CouchPotato.database.cached_results
+    end
+
     private
 
     def bulk_load(ids)
@@ -196,8 +200,5 @@ module CouchPotato
       document.errors.empty?
     end
 
-    def invalidate_cached_results(document)
-      CouchPotato.database.cached_results.delete_if{ |key| key.to_s.match(/#{document.class.to_s}|#{document.id}/i)} if CouchPotato.database.cached_results
-    end
   end
 end
